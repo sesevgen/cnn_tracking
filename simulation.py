@@ -17,57 +17,78 @@ dv = 1
 split_age = 25
 
 # Death rate
-death = 0.05
+death = 0.0
 
 # Target pop
-pop_target = 100.0
+pop_target = 5000.0
 
 # Number of initial cells
-init_cells = 10
+init_cells = 1000
 
 # Size of image space
-img_size = 256
+img_size = np.array([800,800,460])
+
+# Slice to view image at
+img_slice = 230
 
 # Nr of timesteps
 # For now image timesteps are coupled to dynamics
 nr_timesteps = 1000
+
+# Cell dims, given in radius
+cell_dims = np.array([20,10,10],dtype=np.int)
+
+# Intensity power
+power = 16
 
 # For debugging
 np.set_printoptions(threshold=np.nan)
 
 #-------------------------------
 
-def add_gaussian(array,center,age):
-	x=np.linspace(-4,4,9)
-	y=np.linspace(-4,4,9)
-	x,y = np.meshgrid(x, y)
+def add_gaussian(image,center,age):
+	x=np.linspace(-cell_dims[0],cell_dims[0],cell_dims[0]*2+1)
+	y=np.linspace(-cell_dims[1],cell_dims[1],cell_dims[1]*2+1)
+	z=np.linspace(-cell_dims[2],cell_dims[2],cell_dims[2]*2+1)
+	x,y,z = np.meshgrid(y, x, z)
 	if age == split_age or age == 0 or age == 1:
-		sigma_x = 0.5*(age+split_age)/(2.0*split_age)
-		sigma_y = 2.0*(age+split_age)/(2.0*split_age)
+		sigma_x = 0.5*cell_dims[0]*(age+split_age)/(2.0*split_age)
+		sigma_y = 0.5*cell_dims[1]*(age+split_age)/(2.0*split_age)
+		sigma_z = 0.5*cell_dims[2]*(age+split_age)/(2.0*split_age)
 	else:
-		sigma_x = 2.0*(age+split_age)/(2.0*split_age)
-		sigma_y = 2.0*(age+split_age)/(2.0*split_age)
-	z = (1/(2*np.pi*sigma_x*sigma_y) * np.exp(-(x**2/(2*sigma_x**2)
-	     + y**2/(2*sigma_y**2))))*2**12*(age+split_age)/(2.0*split_age)
-	z = np.clip(z,0,255)
-	z = np.uint8(z)
+		sigma_x = 0.5*cell_dims[0]*(age+split_age)/(2.0*split_age)
+		sigma_y = 0.5*cell_dims[1]*(age+split_age)/(2.0*split_age)
+		sigma_z = 0.5*cell_dims[2]*(age+split_age)/(2.0*split_age)
+	k = (1/(2*np.pi*sigma_x*sigma_y*sigma_z) * np.exp(-(x**2/(2*sigma_x**2)
+	     + y**2/(2*sigma_y**2) + z**2/(2*sigma_z**2))))*(2**power)*(((age+split_age)/(2.0*split_age))**3)
+
+
+	k = np.clip(k,0,255)
+	k = np.uint8(k)
 	
 	c_int = center.astype(int)	
-	x=[max(c_int[0]-4,0),min(c_int[0]+5,img_size)]
-	y=[max(c_int[1]-4,0),min(c_int[1]+5,img_size)]
+	#print(c_int)
+	x=[max(c_int[0]-cell_dims[0],0),min(c_int[0]+cell_dims[0]+1,img_size[0])]
+	y=[max(c_int[1]-cell_dims[1],0),min(c_int[1]+cell_dims[1]+1,img_size[1])]
+	z=[max(c_int[2]-cell_dims[2],0),min(c_int[2]+cell_dims[2]+1,img_size[2])]
 	try:
-		array[x[0]:x[1],y[0]:y[1]] += z[0:x[1]-x[0],0:y[1]-y[0]]  
+		image[x[0]:x[1],y[0]:y[1],z[0]:z[1]] += k[0:(x[1]-x[0]),0:(y[1]-y[0]),0:(z[1]-z[0])]  
 	except ValueError:
-		print(x,y)
+		print(image.shape,image[x[0]:x[1],y[0]:y[1],z[0]:z[1]].shape)
+		print(k[0:(x[1]-x[0]),0:(y[1]-y[0]),0:(z[1]-z[0])].shape)
 
 def check_cell_bounds(cell):
 	if cell.coords[0] < 0:
 		return True
-	if cell.coords[0] > 255:
+	if cell.coords[0] > img_size[0]:
 		return True
 	if cell.coords[1] < 0:
 		return True
-	if cell.coords[1] > 255:
+	if cell.coords[1] > img_size[1]:
+		return True
+	if cell.coords[2] < 0:
+		return True
+	if cell.coords[2] > img_size[2]:
 		return True
 	return False
 		
@@ -107,7 +128,7 @@ if __name__ == '__main__':
 
 	cells = set([])
 	for i in range(init_cells):
-		cells.add(Cell(np.random.rand(3)*256,i,i))
+		cells.add(Cell(np.random.rand(3)*img_size,i,i))
 
 	unique_id = init_cells
 	img = None
@@ -117,7 +138,7 @@ if __name__ == '__main__':
 		add=set([])
 		pop = cells.__len__()
 		
-		image = np.zeros((img_size,img_size),dtype=np.uint8)
+		image = np.zeros((img_size[0],img_size[1],img_size[2]),dtype=np.uint8)
 		for cell in cells:
 			add_gaussian(image,cell.coords,cell.age)
 			if np.random.rand(1) < death*(pop/pop_target) or check_cell_bounds(cell):
@@ -134,9 +155,9 @@ if __name__ == '__main__':
 			unique_id += 1
 
 		if img is None:
-			img = plt.imshow(image)
+			img = plt.imshow(image[:,:,img_slice],cmap='gist_gray')
 		else:
-			img.set_data(image)		
+			img.set_data(image[:,:,img_slice])		
 		plt.pause(.5)
 		plt.draw()
 
