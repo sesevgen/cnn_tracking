@@ -1,5 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from skimage import data
+from skimage import color
+from skimage import img_as_float
+import scipy
 #from PIL import Image, ImageDraw
 
 
@@ -23,30 +27,30 @@ death = 0.0
 pop_target = 5000.0
 
 # Number of initial cells
-init_cells = 1000
+init_cells = 5000
 
 # Size of image space
-img_size = np.array([800,800,460])
+img_size = np.array([800,800,200])
 
 # Slice to view image at
-img_slice = 230
+img_slice = 100
 
 # Nr of timesteps
 # For now image timesteps are coupled to dynamics
-nr_timesteps = 1000
+nr_timesteps = 1
 
 # Cell dims, given in radius
-cell_dims = np.array([20,10,10],dtype=np.int)
+cell_dims = np.array([20,20,16],dtype=np.int)
 
 # Intensity power
-power = 16
+power = 20
 
 # For debugging
 np.set_printoptions(threshold=np.nan)
 
 #-------------------------------
 
-def add_gaussian(image,center,age):
+def generate_gaussian(age):
 	x=np.linspace(-cell_dims[0],cell_dims[0],cell_dims[0]*2+1)
 	y=np.linspace(-cell_dims[1],cell_dims[1],cell_dims[1]*2+1)
 	z=np.linspace(-cell_dims[2],cell_dims[2],cell_dims[2]*2+1)
@@ -64,18 +68,24 @@ def add_gaussian(image,center,age):
 
 
 	k = np.clip(k,0,255)
-	k = np.uint8(k)
-	
+	k = np.uint8(k) + 5
+	return k
+
+def add_cell_to_img(image,center,cell,rotate='True'):
 	c_int = center.astype(int)	
 	#print(c_int)
 	x=[max(c_int[0]-cell_dims[0],0),min(c_int[0]+cell_dims[0]+1,img_size[0])]
 	y=[max(c_int[1]-cell_dims[1],0),min(c_int[1]+cell_dims[1]+1,img_size[1])]
 	z=[max(c_int[2]-cell_dims[2],0),min(c_int[2]+cell_dims[2]+1,img_size[2])]
+
+	#if rotate:
+	#	cell =  scipy.ndimage.rotate(cell,30)
+
 	try:
-		image[x[0]:x[1],y[0]:y[1],z[0]:z[1]] += k[0:(x[1]-x[0]),0:(y[1]-y[0]),0:(z[1]-z[0])]  
+		image[x[0]:x[1],y[0]:y[1],z[0]:z[1]] += cell[0:(x[1]-x[0]),0:(y[1]-y[0]),0:(z[1]-z[0])]  
 	except ValueError:
 		print(image.shape,image[x[0]:x[1],y[0]:y[1],z[0]:z[1]].shape)
-		print(k[0:(x[1]-x[0]),0:(y[1]-y[0]),0:(z[1]-z[0])].shape)
+		print(cell[0:(x[1]-x[0]),0:(y[1]-y[0]),0:(z[1]-z[0])].shape)
 
 def check_cell_bounds(cell):
 	if cell.coords[0] < 0:
@@ -126,12 +136,16 @@ class Cell(object):
 
 if __name__ == '__main__':
 
+
 	cells = set([])
+
 	for i in range(init_cells):
 		cells.add(Cell(np.random.rand(3)*img_size,i,i))
 
 	unique_id = init_cells
 	img = None
+
+	cell_kernel = generate_gaussian(2)
 
 	for timesteps in range(nr_timesteps):
 		remove = set([])
@@ -140,7 +154,7 @@ if __name__ == '__main__':
 		
 		image = np.zeros((img_size[0],img_size[1],img_size[2]),dtype=np.uint8)
 		for cell in cells:
-			add_gaussian(image,cell.coords,cell.age)
+			add_cell_to_img(image,cell.coords,cell_kernel)
 			if np.random.rand(1) < death*(pop/pop_target) or check_cell_bounds(cell):
 				remove.add(cell)
 			#if np.random.rand(1) < split*(pop_target/pop):
@@ -155,11 +169,16 @@ if __name__ == '__main__':
 			unique_id += 1
 
 		if img is None:
-			img = plt.imshow(image[:,:,img_slice],cmap='gist_gray')
-		else:
-			img.set_data(image[:,:,img_slice])		
-		plt.pause(.5)
-		plt.draw()
+			image = color.gray2rgb(image[:,:,img_slice]) *[0,1,0]
+			img = plt.imshow(image)
+			#img = plt.imshow(image[:,:,img_slice],cmap='gist_gray')
+		#else:
+			#img.set_data(image[:,:,img_slice])
+		plt.show()		
+		#plt.pause(.5)
+		#plt.draw()
+
+	
 
 	
 
